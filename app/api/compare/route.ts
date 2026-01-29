@@ -16,12 +16,13 @@ export async function POST(req: Request) {
     logLine(`Search: ${partNumber}`);
 
     // Ejecutamos la búsqueda profesional
-    const { results, usdRate } = await searchAll(partNumber, limit);
+    const { results, usdRate, debug } = await searchAll(partNumber, limit);
 
     return NextResponse.json({
       partNumber,
       results,
       usedBnaUsdSell: usdRate,
+      debug
     });
   } catch (err: any) {
     console.error("Critical API Error:", err);
