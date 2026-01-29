@@ -3,30 +3,25 @@ import { PriceResult } from "./types";
 import { dedupeByUrl, pnMatchesTitle } from "./utils";
 import { searchMercadoLibre } from "./marketplaces/mercadolibre";
 import { searchHardGamers } from "./aggregators/hardgamers";
+import { searchPrecialo } from "./aggregators/precialo";
 import { getBnaUsdSellArs } from "../bna";
 
 export async function searchAll(partNumber: string, limit = 100): Promise<{ results: PriceResult[], usdRate: number }> {
-  let usdRate = 1465;
+  let usdRate = 1470;
   try {
     usdRate = await getBnaUsdSellArs();
   } catch (e) { }
 
-  // ESTRATEGIA ATÓMICA: Generamos las búsquedas que Google sabe que funcionan
   const raw = partNumber.toUpperCase();
-  const model = raw.match(/\d{3,4}/)?.[0] || "";
-  const brand = raw.match(/(ASUS|TUF|GIGABYTE|MSI|EVGA|KINGSTON|WD|LOGITECH)/i)?.[0] || "";
+  const modelMatch = raw.match(/\d{3,5}/);
+  const model = modelMatch ? modelMatch[0] : "";
 
-  // Variaciones de ráfaga
-  const query1 = raw; // Exacta
-  const query2 = `${brand} ${model}`.trim(); // Marca + Modelo
-  const query3 = model; // Solo el número (Fuerza Bruta)
-
+  // Ráfaga de búsqueda en 3 dimensiones
   const tasks = [
-    searchMercadoLibre(query1, 15),
-    searchMercadoLibre(query2, 15),
-    searchHardGamers(query1, 20),
-    searchHardGamers(query2, 20),
-    searchHardGamers(query3, 20)
+    searchPrecialo(raw, 40),
+    searchMercadoLibre(raw, 20),
+    searchHardGamers(model, 30), // Búsqueda de respaldo solo por modelo
+    searchHardGamers(raw, 20)
   ];
 
   const resultsArr = await Promise.allSettled(tasks);
@@ -38,7 +33,6 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
     }
   });
 
-  // Auditoría por Puntuación: Filtramos los duplicados y las coincidencias falsas
   const processed = combined.map(item => ({
     ...item,
     priceArs: item.currency === "USD" ? Math.round(item.originalPrice * usdRate) : Math.round(item.priceArs)
