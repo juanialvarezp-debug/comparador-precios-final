@@ -1,43 +1,48 @@
-import axios from "axios";
-import { PriceResult } from "../types";
-import { dedupeByUrl, pnMatchesTitle } from "../utils";
 
-export async function searchCompraGamer(partNumber: string, limit = 5): Promise<PriceResult[]> {
-    // Usamos el endpoint de autocompletado/búsqueda rápida que es puro JSON y muy estable
-    const url = `https://compragamer.com/index.php?listado_prod=&seccion=3&nro_max=50&nombre=${encodeURIComponent(partNumber)}`;
+import * as cheerio from "cheerio";
+import { PriceResult } from "../types";
+import { fetchHtml, parseArsPrice, pnMatchesTitle, dedupeByUrl } from "../utils";
+
+export async function searchCompraGamer(partNumber: string, limit = 20): Promise<PriceResult[]> {
+    // CompraGamer usa un buscador por palabras
+    const model = partNumber.match(/\d{3,4}/)?.[0] || "";
+    const searchTerm = model || partNumber;
+
+    // URL de búsqueda de CompraGamer (vía AJAX o Web)
+    const url = `https://compragamer.com/?seccion=3&destacados=0&nro_max=100&search=${encodeURIComponent(searchTerm)}`;
 
     try {
-        const res = await axios.get(url, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-                "Referer": "https://compragamer.com/",
-                "X-Requested-With": "XMLHttpRequest"
-            },
-            timeout: 8000
-        });
+        const html = await fetchHtml(url);
+        if (!html) return [];
 
-        const data = res.data;
+        const $ = cheerio.load(html);
         const results: PriceResult[] = [];
 
-        if (data && data.productos) {
-            for (const p of data.productos) {
-                if (!pnMatchesTitle(partNumber, p.nombre)) continue;
+        // Selectores de CompraGamer (Estructura de grilla)
+        $("div[class*='item'], .card-product").each((_, el) => {
+            const $el = $(el);
+            const title = $el.find("h1, h2, h3, .title").text().trim();
+            if (!title || !pnMatchesTitle(partNumber, title)) return;
 
-                results.push({
-                    supplier: "CompraGamer",
-                    title: p.nombre,
-                    priceArs: p.precio_especial || p.precio_lista,
-                    originalPrice: p.precio_especial || p.precio_lista,
-                    currency: "ARS",
-                    url: `https://compragamer.com/producto/${p.url}`,
-                    thumbnail: p.imagen ? `https://compragamer.com/img_productos/${p.imagen}` : undefined
-                });
-            }
-        }
+            const priceText = $el.find("span[class*='price'], .price").text();
+            const price = parseArsPrice(priceText);
+            if (!price) return;
 
-        return dedupeByUrl(results).slice(0, limit);
+            const href = $el.find("a").attr("href");
+            if (!href) return;
+
+            results.push({
+                supplier: "CompraGamer",
+                title,
+                priceArs: price,
+                originalPrice: price,
+                currency: "ARS",
+                url: href.startsWith("http") ? href : `https://compragamer.com${href}`
+            });
+        });
+
+        return results;
     } catch (error) {
-        console.error("CompraGamer search error:", error);
         return [];
     }
 }
