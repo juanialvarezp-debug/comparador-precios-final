@@ -14,15 +14,25 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
   } catch (e) { }
 
   const raw = partNumber.toUpperCase();
-  const modelMatch = raw.match(/\d{3,5}/);
-  const model = modelMatch ? modelMatch[0] : "";
 
-  // Búsqueda en ráfaga Multi-Tienda
+  // EXTRACCIÓN DE LA ESENCIA (V17.2)
+  // Ejemplo: TUF-GTX1660S-O6G-GAMING -> Model: 1660, Variant: SUPER
+  const modelNum = raw.match(/\d{3,5}/)?.[0] || "";
+  const isSuper = raw.includes("SUPER") || raw.includes("1660S");
+  const isTi = raw.includes("TI") && !raw.includes("TITAN");
+
+  // Término de búsqueda optimizado para tiendas rígidas
+  let searchTerm = modelNum;
+  if (isSuper) searchTerm += " super";
+  else if (isTi) searchTerm += " ti";
+
+  if (!searchTerm || searchTerm.length < 3) searchTerm = raw;
+
   const tasks = [
-    { name: "Precialo", promise: searchPrecialo(model || raw, 30) },
-    { name: "MercadoLibre", promise: searchMercadoLibre(model || raw, 20) },
-    { name: "HardGamers", promise: searchHardGamers(model || raw, 20) },
-    { name: "Venex", promise: searchVenex(model || raw, 20) }
+    { name: "Precialo", promise: searchPrecialo(searchTerm, 30) },
+    { name: "MercadoLibre", promise: searchMercadoLibre(searchTerm, 30) },
+    { name: "HardGamers", promise: searchHardGamers(searchTerm, 30) },
+    { name: "Venex", promise: searchVenex(searchTerm, 30) }
   ];
 
   const resultsArr = await Promise.allSettled(tasks.map(t => t.promise));
@@ -34,8 +44,6 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
     if (res.status === "fulfilled") {
       debug[sourceName] = res.value.length;
       combined.push(...res.value);
-    } else {
-      debug[sourceName] = "error";
     }
   });
 
@@ -44,8 +52,17 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
     priceArs: item.currency === "USD" ? Math.round(item.originalPrice * usdRate) : Math.round(item.priceArs)
   })).filter(item => {
     const t = item.title.toUpperCase();
-    // Si no hay modelo, dejamos pasar todo. Si hay, debe estar en el título.
-    return model ? t.includes(model) : true;
+    // El modelo numérico debe estar (ej: 1660)
+    if (modelNum && !t.includes(modelNum)) return false;
+
+    // Si buscamos SUPER, el título debe decir SUPER (o el modelo compacto)
+    if (isSuper && !t.includes("SUPER") && !t.includes(modelNum + "S")) return false;
+
+    // Si el PN del usuario tiene una marca (ej: TUF), intentamos que el título la tenga
+    const brandMatch = raw.match(/(TUF|ASUS|MSI|EVGA|GIGABYTE|ROG)/);
+    if (brandMatch && !t.includes(brandMatch[0])) return false;
+
+    return true;
   });
 
   const final = dedupeByUrl(processed).sort((a, b) => a.priceArs - b.priceArs);
