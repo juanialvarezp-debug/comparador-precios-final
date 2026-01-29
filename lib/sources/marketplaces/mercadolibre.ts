@@ -3,14 +3,12 @@ import * as cheerio from "cheerio";
 import { PriceResult } from "../types";
 import { dedupeByUrl, parseArsPrice, pnMatchesTitle, fetchHtml } from "../utils";
 
-export async function searchMercadoLibre(partNumber: string, limit = 25): Promise<PriceResult[]> {
-  // ESTRATEGIA GOOGLE: MercadoLibre busca mejor con términos simples.
-  // TUF-GTX1660S-O6G-GAMING -> 1660 super
-  const modelNum = partNumber.match(/\d{3,4}/)?.[0] || "";
-  const series = partNumber.toUpperCase().includes("1660") ? "1660 super" : modelNum;
-  const searchTerms = series || partNumber;
+export async function searchMercadoLibre(partNumber: string, limit = 40): Promise<PriceResult[]> {
+  // Traducimos términos técnicos a comerciales (1660S -> 1660 super)
+  const model = partNumber.match(/\d{3,4}/)?.[0] || "";
+  const searchTerm = partNumber.toUpperCase().includes("1660") ? "1660 super" : model || partNumber;
 
-  const url = `https://listado.mercadolibre.com.ar/${encodeURIComponent(searchTerms)}`;
+  const url = `https://listado.mercadolibre.com.ar/${encodeURIComponent(searchTerm)}`;
 
   try {
     const html = await fetchHtml(url);
@@ -19,24 +17,21 @@ export async function searchMercadoLibre(partNumber: string, limit = 25): Promis
     const $ = cheerio.load(html);
     const results: PriceResult[] = [];
 
-    // Selectores universales de MercadoLibre 2026
+    // Selectores Universales (Capturan el diseño viejo y el nuevo 'Poly')
     $(".ui-search-layout__item, .ui-search-result, .poly-card").each((_, el) => {
       const $el = $(el);
 
-      const title = $el.find(".ui-search-item__title, .poly-component__title, h2").first().text().trim();
-      if (!title) return;
-
-      // EL AUDITOR DECIDE (V16)
-      if (!pnMatchesTitle(partNumber, title)) return;
+      const title = $el.find(".ui-search-item__title, .poly-component__title, h2, h3").first().text().trim();
+      if (!title || !pnMatchesTitle(partNumber, title)) return;
 
       const href = $el.find("a").attr("href");
       if (!href) return;
 
-      // Intentamos capturar el precio de varios selectores posibles
-      const priceText = $el.find(".andes-money-amount__fraction").first().text().trim();
+      // Buscamos precio en cualquier lugar del contenedor
+      const priceText = $el.find(".andes-money-amount__fraction, .price-tag-fraction, .poly-price__current .andes-money-amount__fraction").first().text().trim();
       const price = parseArsPrice(priceText);
 
-      if (!price || price < 5000) return;
+      if (!price) return;
 
       results.push({
         supplier: "MercadoLibre",
