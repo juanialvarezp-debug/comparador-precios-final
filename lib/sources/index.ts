@@ -16,12 +16,13 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
   const modelMatch = raw.match(/\d{3,5}/);
   const model = modelMatch ? modelMatch[0] : "";
 
-  // Ráfaga de búsqueda en 3 dimensiones
+  // Simplificamos términos para que las tiendas no nos bloqueen por "búsqueda técnica"
+  const simpleTerm = raw.includes("GTX") ? `${model} super` : raw.includes("RTX") ? `RTX ${model}` : raw;
+
   const tasks = [
-    searchPrecialo(raw, 40),
-    searchMercadoLibre(raw, 20),
-    searchHardGamers(model, 30), // Búsqueda de respaldo solo por modelo
-    searchHardGamers(raw, 20)
+    searchPrecialo(simpleTerm, 40),
+    searchMercadoLibre(simpleTerm, 30),
+    searchHardGamers(model, 30)
   ];
 
   const resultsArr = await Promise.allSettled(tasks);
@@ -33,11 +34,20 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
     }
   });
 
+  // FILTRO V16.4: Muy flexible para asegurar resultados en producción
   const processed = combined.map(item => ({
     ...item,
     priceArs: item.currency === "USD" ? Math.round(item.originalPrice * usdRate) : Math.round(item.priceArs)
-  })).filter(item => pnMatchesTitle(partNumber, item.title));
+  })).filter(item => {
+    const title = item.title.toUpperCase();
+    // Si el número de modelo (ej: 1660) está en el título, lo dejamos pasar.
+    return model ? title.includes(model) : true;
+  });
 
   const final = dedupeByUrl(processed).sort((a, b) => a.priceArs - b.priceArs);
-  return { results: final.slice(0, limit), usdRate };
+
+  return {
+    results: final.slice(0, limit),
+    usdRate
+  };
 }
