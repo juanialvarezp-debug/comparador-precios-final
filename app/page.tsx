@@ -84,7 +84,7 @@ export default function Page() {
                   BNA: {data?.usedBnaUsdSell ? formatArs(data.usedBnaUsdSell) : "$ 1.470"}
                 </div>
                 <div className="bg-green-50 text-green-700 px-4 py-1 rounded-full text-[11px] font-black border border-green-100 uppercase tracking-widest flex items-center gap-2">
-                  <ShieldCheck size={12} /> Engine: V18.5 Stable
+                  <ShieldCheck size={12} /> Engine: V18.6 Stable
                 </div>
               </div>
             </div>
