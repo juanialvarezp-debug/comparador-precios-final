@@ -84,7 +84,7 @@ export default function Page() {
                   BNA: {data?.usedBnaUsdSell ? formatArs(data.usedBnaUsdSell) : "$ 1.470"}
                 </div>
                 <div className="bg-green-50 text-green-700 px-4 py-1 rounded-full text-[11px] font-black border border-green-100 uppercase tracking-widest flex items-center gap-2">
-                  <ShieldCheck size={12} /> Engine: V18.0 Stable
+                  <ShieldCheck size={12} /> Engine: V18.5 Stable
                 </div>
               </div>
             </div>
@@ -170,8 +170,8 @@ export default function Page() {
                           <tr key={i} className={`hover:bg-slate-50/30 transition-all ${isBest ? 'bg-green-50/20' : ''}`}>
                             <td className="pl-14 py-12">
                               <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${r.supplier === 'MercadoLibre' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                  r.supplier === 'Venex' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                    'bg-white text-slate-600 border-slate-200'
+                                r.supplier === 'Venex' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  'bg-white text-slate-600 border-slate-200'
                                 }`}>
                                 {r.supplier}
                               </span>

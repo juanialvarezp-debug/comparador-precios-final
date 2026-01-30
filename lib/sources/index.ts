@@ -17,19 +17,30 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
   const raw = partNumber.toUpperCase();
   const modelNum = raw.match(/\d{3,5}/)?.[0] || "";
 
-  // ESTRATEGIA DE PRECISIÓN V18.2: 
-  // Usamos el término completo para Precialo y ML (para encontrar piezas exactas)
-  // Usamos el modelo para HardGamers y Venex (que son más caprichosos con los códigos largos)
-  const exactTerm = raw;
-  const modelTerm = modelNum || raw;
-
-  const tasks = [
-    { name: "Precialo", promise: searchPrecialo(exactTerm, 30) }, // Buscamos EXACTO
-    { name: "MercadoLibre", promise: searchMercadoLibre(exactTerm, 20) }, // Buscamos EXACTO
-    { name: "HardGamers", promise: searchHardGamers(modelTerm, 20) }, // Backup por modelo
-    { name: "Venex", promise: searchVenex(modelTerm, 20) },
-    { name: "CompraGamer", promise: searchCompraGamer(modelTerm, 20) }
+  // ESTRATEGIA DE BÚSQUEDA EXPLOSIVA (V18.5)
+  // Generamos variaciones para "engañar" a buscadores limitados
+  const variations = [
+    raw, // Exacto: DUAL-GTX1650...
+    modelNum ? `${modelNum}` : raw, // Modelo solo: 1650
+    modelNum ? `GTX ${modelNum}` : raw, // Genérico: GTX 1650
+    modelNum ? `ASUS ${modelNum}` : raw  // Marca + Modelo: ASUS 1650
   ];
+
+  const tasks: { name: string, promise: Promise<PriceResult[]> }[] = [];
+
+  // Precialo y ML: Buscamos exacto y con modelo (2 intentos c/u)
+  tasks.push({ name: "Precialo", promise: searchPrecialo(raw, 20) });
+  tasks.push({ name: "Precialo", promise: searchPrecialo(modelNum, 20) });
+
+  tasks.push({ name: "MercadoLibre", promise: searchMercadoLibre(raw, 20) });
+  tasks.push({ name: "MercadoLibre", promise: searchMercadoLibre(modelNum, 20) });
+
+  // HardGamers: Muy sensible, buscamos modelo + GTX
+  tasks.push({ name: "HardGamers", promise: searchHardGamers(modelNum ? `GTX ${modelNum}` : raw, 20) });
+
+  // Tiendas directas: Modelo suele ser suficiente
+  tasks.push({ name: "Venex", promise: searchVenex(modelNum || raw, 20) });
+  tasks.push({ name: "CompraGamer", promise: searchCompraGamer(modelNum || raw, 20) });
 
   const resultsArr = await Promise.allSettled(tasks.map(t => t.promise));
   const combined: PriceResult[] = [];
@@ -38,12 +49,12 @@ export async function searchAll(partNumber: string, limit = 100): Promise<{ resu
   resultsArr.forEach((res, i) => {
     const sourceName = tasks[i].name;
     if (res.status === "fulfilled") {
-      debug[sourceName] = res.value.length;
+      debug[sourceName] = (debug[sourceName] || 0) + res.value.length;
       combined.push(...res.value);
     }
   });
 
-  // Auditoría Final: ¿El resultado coincide semánticamente con lo pedido?
+  // El AUDITOR FINAL es el que decide qué sirve (V18.5)
   const processed = combined.map(item => ({
     ...item,
     priceArs: item.currency === "USD" ? Math.round(item.originalPrice * usdRate) : Math.round(item.priceArs)
